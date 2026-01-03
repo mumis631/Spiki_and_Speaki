@@ -183,8 +183,7 @@ MAP_CONFIG = {
         "chapter_id": "cave", 
         "bg_key": "bg_cave", 
         "csv": "cave_05.csv",
-        "target_changes": 2,
-        "tutorial": ["エレベーターバグでブロックを運ぼう。","ぶっ飛んだらごめんね。"]
+        "target_changes": 1,
     },
     "cave_06": {
         "chapter_id": "cave", 
