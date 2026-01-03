@@ -109,21 +109,11 @@ class Game:
         pygame.mixer.pre_init(44100, -16, 2, 512) # 周波数を 44100Hz に固定
         pygame.init()
 
-        # --- 日本語フォント読み込み ---
-        font_path = resource_path("APJapanesefont.ttf")  # フォントファイル名を直接指定
+        # --- フォント読み込み ---
         font_size = 28
         
-        # 1. まずカレントディレクトリのファイルを試す
-        if os.path.exists(font_path):
-            self.font_s = pygame.font.Font(font_path, font_size)
-            self.font_l = pygame.font.SysFont(font_path, 48, bold=True)
-            print("font1")
-        else:
-            # 2. ファイルがない場合はシステムフォントから「日本語対応」を明示して取得
-            # Windows: "msgothic", Mac: "hiraginosansgbw3"
-            self.font_s = pygame.font.SysFont("msgothic, hiraginosansgbw3, sans-serif, Arial", font_size)
-            self.font_l = pygame.font.SysFont("msgothic, hiraginosansgbw3, sans-serif, Arial", 48, bold=True)
-            print("font2")
+        self.font_s = pygame.font.SysFont("sans-serif, msgothic, hiraginosansgbw3, Arial", font_size)
+        self.font_l = pygame.font.SysFont("sans-serif, msgothic, hiraginosansgbw3, Arial", 48, bold=True)
 
         self.is_touch_device = False
 
@@ -169,7 +159,7 @@ class Game:
         self.play_bgm()
         pygame.mixer.set_num_channels(16)
         self.warmup_sounds()
-        
+
         self.vol_bgm = 0.2 # BGM音量管理 (0.0 ～ 1.0)
         self.vol_se = 0.2 # SE音量管理 (0.0 ～ 1.0)
         self.slider_dragging = None # "BGM" か "SE" か
@@ -792,7 +782,6 @@ class Game:
                         s = pygame.Surface(temp_rect.size, pygame.SRCALPHA)
                         pygame.draw.ellipse(s, glow_color, s.get_rect())
                         self.game_canvas.blit(s, temp_rect.topleft)
-                        # ← ここにあった text_color = (150, 150, 150) を削除しました
 
                     # 3. テキスト描画
                     check_txt = self.font_s.render(text_str, True, text_color)
@@ -849,8 +838,7 @@ class Game:
         # 1. 表示内容の定義
         credits = [
             "ｽﾋﾟｷ＆スピッキー",
-            "Created by: mumis",
-            "使用フォント: あんずもじ (https://apricot.ciao.jp/)"
+            "Created by: mumis"
         ]
         # 右下からのマージン
         margin_right = 20
