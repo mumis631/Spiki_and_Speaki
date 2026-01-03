@@ -81,11 +81,11 @@ class Player:
                     self.pos_x = float(temp_rect.x - 4)
         
         # 2.垂直方向（ジャンプ・落下）の判定
-        # 重力加算：0.8にフレーム比率を掛ける
-        self.vel_y += GRAVITY * frame_ratio
+        delta_v = GRAVITY * frame_ratio
+        self.vel_y += delta_v
 
         # 座標移動：vel_y にフレーム比率を掛ける
-        self.pos_y += self.vel_y * frame_ratio
+        self.pos_y += (self.vel_y * frame_ratio) + (0.5 * delta_v * frame_ratio)
         temp_rect.y = int(self.pos_y)
         
         if self.on_ground:
