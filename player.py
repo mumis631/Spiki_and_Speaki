@@ -81,11 +81,15 @@ class Player:
                     self.pos_x = float(temp_rect.x - 4)
         
         # 2.垂直方向（ジャンプ・落下）の判定
-        delta_v = GRAVITY * frame_ratio
-        self.vel_y += delta_v
+        self.pos_y += self.vel_y * frame_ratio
 
-        # 座標移動：vel_y にフレーム比率を掛ける
-        self.pos_y += (self.vel_y * frame_ratio) + (0.5 * delta_v * frame_ratio)
+        # この1フレーム間の重力による加速分を計算
+        # 物理公式の 0.5 * a * t^2 に基づき、移動距離に加速分を加える
+        delta_v = GRAVITY * frame_ratio
+        self.pos_y += 0.5 * delta_v * frame_ratio
+
+        # 次のフレームのために速度を更新する
+        self.vel_y += delta_v
         temp_rect.y = int(self.pos_y)
         
         if self.on_ground:
@@ -108,13 +112,19 @@ class Player:
 
         # 2-2. すり抜け床（プラットフォーム）
         if not keys.get(pygame.K_DOWN, False) and self.vel_y >= 0:
+            # 今回の移動で通過したであろう距離（前回の足元位置を推測）
+            prev_bottom = temp_rect.bottom - (self.vel_y * frame_ratio)
+            
             for p in platforms:
-                # 前フレームの足元位置を考慮した判定
-                if temp_rect.colliderect(p) and (temp_rect.bottom - self.vel_y * dt) <= p.top + 5:
-                    temp_rect.bottom = p.top
-                    self.pos_y = float(temp_rect.y)
-                    self.vel_y = 0
-                    self.on_ground = True
+                if temp_rect.colliderect(p):
+                    # 1. 移動前(prev_bottom)が床の上端(p.top)より上にあった
+                    # 2. 現在の足元(temp_rect.bottom)が床の上端より下にある
+                    if prev_bottom <= p.top + 2: # +2は浮動小数点誤差の遊び
+                        temp_rect.bottom = p.top
+                        self.pos_y = float(temp_rect.y)
+                        self.vel_y = 0
+                        self.on_ground = True
+                        break # 一つ床に乗ったら判定終了
 
         # --- 5. 結果の反映 ---
         # --- Hitboxの結果を実際の表示用Rectに反映させる ---

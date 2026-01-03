@@ -106,14 +106,23 @@ class Game:
     ###
 
     def __init__(self):
-        pygame.mixer.pre_init(44100, -16, 2, 512) # 周波数を 44100Hz に固定
+        pygame.mixer.pre_init(44100, -16, 1, 512) # 周波数を 44100Hz に固定
         pygame.init()
 
         # --- フォント読み込み ---
+        font_path = resource_path("Fonts/NotoSansJP-Regular.otf")  # フォントファイル名を直接指定
         font_size = 28
         
-        self.font_s = pygame.font.SysFont("sans-serif, msgothic, hiraginosansgbw3, Arial", font_size)
-        self.font_l = pygame.font.SysFont("sans-serif, msgothic, hiraginosansgbw3, Arial", 48, bold=True)
+        # 1. まずカレントディレクトリのファイルを試す
+        if os.path.exists(font_path):
+            self.font_s = pygame.font.Font(font_path, font_size)
+            self.font_l = pygame.font.SysFont(font_path, 48, bold=True)
+            print("a")
+        else:
+            # 2. ファイルがない場合はシステムフォントから「日本語対応」を明示して取得
+            # Windows: "msgothic", Mac: "hiraginosansgbw3"
+            self.font_s = pygame.font.SysFont("msgothic, hiraginosansgbw3, sans-serif, Arial", font_size)
+            self.font_l = pygame.font.SysFont("msgothic, hiraginosansgbw3, sans-serif, Arial", 48, bold=True)
 
         self.is_touch_device = False
 
@@ -158,10 +167,10 @@ class Game:
         self.load_sounds()
         self.play_bgm()
         pygame.mixer.set_num_channels(16)
-        self.warmup_sounds()
+        self.audio_initialized = False
 
-        self.vol_bgm = 0.2 # BGM音量管理 (0.0 ～ 1.0)
-        self.vol_se = 0.2 # SE音量管理 (0.0 ～ 1.0)
+        self.vol_bgm = 0.4 # BGM音量管理 (0.0 ～ 1.0)
+        self.vol_se = 0.4 # SE音量管理 (0.0 ～ 1.0)
         self.slider_dragging = None # "BGM" か "SE" か
         self.apply_volume() # 初期音量を適用
 
@@ -197,12 +206,49 @@ class Game:
         self.btn_esc = pygame.Rect(0, 0, 0, 0)
 
 
-    def warmup_sounds(self):
-        for sound in self.sounds.values():
-            sound.set_volume(0) # 無音にする
-            sound.play()        # 一度再生してブラウザにデコードを強制させる
-            sound.stop()
-            sound.set_volume(0.5) # 本番用の音量に戻す
+    # #######################################################################################
+    # SOUNDS
+    # #######################################################################################
+    async def warmup_sounds(self):
+        # 1. BGMを開始（これで全体のゲートが開く）
+        if not pygame.mixer.music.get_busy():
+            pygame.mixer.music.set_volume(0.4)
+            pygame.mixer.music.play(-1)
+
+        # 2. 代表的な短い音を1つだけ「無音」で鳴らし、SFXチャネルを起動
+        # ※全てをループさせる必要はありません。1つ通ればパスが開通します。
+        if 'break' in self.sounds:
+            self.sounds['break'].set_volume(0)
+            self.sounds['break'].play()
+            await asyncio.sleep(0.5)
+            self.sounds['break'].stop()
+
+        # 3. 内部フラグを立てて完了
+        self.audio_initialized = True
+        self.apply_volume()
+    
+    def play_bgm(self):
+        if os.path.exists(resource_path('sounds/bgm.ogg')):
+            pygame.mixer.music.load(resource_path('sounds/bgm.ogg'))
+            pygame.mixer.music.play(-1) # -1で無限ループ
+
+    def apply_volume(self):
+        # BGMの音量を適用
+        pygame.mixer.music.set_volume(self.vol_bgm)
+        # 全SEの音量を適用
+        for s in self.sounds.values():
+            s.set_volume(self.vol_se)
+
+    def load_sounds(self):
+        self.sounds = {
+            'jump_small': pygame.mixer.Sound(resource_path('sounds/jump_small.ogg')),
+            'jump_big': pygame.mixer.Sound(resource_path('sounds/jump_big.ogg')),
+            'break': pygame.mixer.Sound(resource_path('sounds/break.ogg')),
+            'change_small': pygame.mixer.Sound(resource_path('sounds/change_small.ogg')),
+            'change_big': pygame.mixer.Sound(resource_path('sounds/change_big.ogg')),
+            'clear': pygame.mixer.Sound(resource_path('sounds/clear.ogg')),
+            'hit': pygame.mixer.Sound(resource_path('sounds/hit.ogg')) # 頭突き音
+        } 
 
     def load_assets(self):
         self.images = {}
@@ -302,19 +348,7 @@ class Game:
         self.player.pos_y = float(start_y)
         self.player.vel_y = 0      # 落下速度リセット
         self.player.on_ground = True # 接地状態から開始
-        
 
-    def load_sounds(self):
-        self.sounds = {
-            'jump_small': pygame.mixer.Sound(resource_path('sounds/jump_small.ogg')),
-            'jump_big': pygame.mixer.Sound(resource_path('sounds/jump_big.ogg')),
-            'break': pygame.mixer.Sound(resource_path('sounds/break.ogg')),
-            'change_small': pygame.mixer.Sound(resource_path('sounds/change_small.ogg')),
-            'change_big': pygame.mixer.Sound(resource_path('sounds/change_big.ogg')),
-            'clear': pygame.mixer.Sound(resource_path('sounds/clear.ogg')),
-            'hit': pygame.mixer.Sound(resource_path('sounds/hit.ogg')) # 頭突き音
-        } 
-        
     def save_game(self):
         try:
             # 1. cleared_stagesは既に辞書なので、そのまま保存
@@ -374,18 +408,6 @@ class Game:
         except Exception as e:
             print(f"ロード失敗: {e}")
             self.cleared_stages = {}
-            
-    def play_bgm(self):
-        if os.path.exists(resource_path('sounds/bgm.ogg')):
-            pygame.mixer.music.load(resource_path('sounds/bgm.ogg'))
-            pygame.mixer.music.play(-1) # -1で無限ループ
-
-    def apply_volume(self):
-        # BGMの音量を適用
-        pygame.mixer.music.set_volume(self.vol_bgm)
-        # 全SEの音量を適用
-        for s in self.sounds.values():
-            s.set_volume(self.vol_se)
 
     def is_stage_unlocked(self, chapter_idx, stage_idx):
         """
@@ -585,6 +607,9 @@ class Game:
             # 2. ブロック自身の物理更新（ここで vel_x に基づいて実際に動く）
             pb.update(obstacles, self.map_mgr.platforms, dt)
 
+    # #######################################################################################
+    # DRAW
+    # #######################################################################################
     def draw_select_menu(self):
         # --- 背景描画 ---
         # 現在のチャプター名を取得 (例: "grassland", "forest" ...)
@@ -864,68 +889,68 @@ class Game:
             self.game_canvas.blit(credit_txt, (pos_x, pos_y))
 
     def draw_virtual_keys(self, surface, screen_w, screen_h):
-        # ボタンの動的配置（画面の端からの距離で決める）
+        # --- 1. サイズと余白の設定 ---
         margin = 20
-        bw, bh = 70, 70
+        bw, bh = 90, 90    # 重なりを防ぐため、100から少しだけ絞り90pxに調整
         sw, sh = 60, 60
+        gap = 15           # ボタン同士の隙間
 
-        # 左下端基準（移動キー）
-        self.btn_left = pygame.Rect(margin, screen_h - bh - margin - 80, bw, bh)
-        self.btn_right = pygame.Rect(margin + bw + 10, screen_h - bh - margin - 80, bw, bh)
-        self.btn_up = pygame.Rect(margin + bw // 2 + 5, screen_h - (bh*2) - margin - 90, bw, bh)
-        self.btn_down = pygame.Rect(margin + bw // 2 + 5, screen_h - bh - margin, bw, bh)
+        # --- 2. ボタンの配置定義 ---
+        # 左側（移動）：重なりを防ぐため「下」を中央、「左」「右」をその両脇に配置（逆T字）
+        # ※画面の一番下に「下ボタン」を配置
+        self.btn_down  = pygame.Rect(margin + bw + gap, screen_h - bh - margin, bw, bh)
+        self.btn_left  = pygame.Rect(margin, screen_h - bh - margin, bw, bh)
+        self.btn_right = pygame.Rect(margin + (bw + gap) * 2, screen_h - bh - margin, bw, bh)
+        
+        # 「上」は必要なシーンでのみ使用（配置は左と右の間、一段上）
+        self.btn_up    = pygame.Rect(margin + bw + gap, screen_h - (bh * 2) - margin - gap, bw, bh)
 
-        # 右下端基準（アクション）
-        self.btn_jump = pygame.Rect(screen_w - bw - margin, screen_h - bh - margin - 80, bw, bh)
-        self.btn_change = pygame.Rect(screen_w - (bw*2) - margin - 10, screen_h - bh - margin - 80, bw, bh)
+        # 右側（アクション）：Jumpを右端、Changeをその隣に配置（横並び）
+        self.btn_jump   = pygame.Rect(screen_w - bw - margin, screen_h - bh - margin, bw, bh)
+        self.btn_change = pygame.Rect(screen_w - (bw * 2) - margin - gap, screen_h - bh - margin, bw, bh)
 
-        # 上端基準（システム系）
-        self.btn_menu = pygame.Rect(margin, margin, sw, sh)         # 左上
-        self.btn_esc = pygame.Rect((screen_w - sw) / 2, margin, sw, sh) # Mの隣
-        self.btn_reload = pygame.Rect(screen_w - sw - margin, margin, sw, sh) # 右上
+        # システム系（画面上部）
+        self.btn_menu   = pygame.Rect(margin, margin, sw, sh)
+        self.btn_esc    = pygame.Rect((screen_w - sw) / 2, margin, sw, sh)
+        self.btn_reload = pygame.Rect(screen_w - sw - margin, margin, sw, sh)
 
-        # ポーズ中は「ESC」のみ、あるいは設定UIのみ表示
+        # --- 3. 表示ロジック ---
         if self.is_paused:
             buttons = [(self.btn_esc, "ESC")]
         else:
-            # シーンごとに表示するボタンを定義
             if self.scene == "SELECT":
-                # セレクト画面：十字キーと決定(Jumpボタンの場所)のみ
                 buttons = [
                     (self.btn_left, "←"), (self.btn_right, "→"),
                     (self.btn_up, "↑"), (self.btn_down, "↓"),
-                    (self.btn_jump, "OK") ,(self.btn_esc, "ESC")
+                    (self.btn_jump, "OK"), (self.btn_esc, "ESC")
                 ]
             elif self.scene == "PLAYING":
-                # プレイ中：すべて表示
+                # プレイ中：↑は除外、移動は←↓→の並びに
+                jump_label = "OK" if self.is_cleared else "Jump"
                 buttons = [
-                    (self.btn_left, "←"), (self.btn_right, "→"),
-                    (self.btn_up, "↑"), (self.btn_down, "↓"),
-                    (self.btn_jump, "Jump"), (self.btn_change, "Ch"),
+                    (self.btn_left, "←"), (self.btn_down, "↓"), (self.btn_right, "→"),
+                    (self.btn_jump, jump_label),
                     (self.btn_reload, "R"), (self.btn_menu, "M"),
-                    (self.btn_esc, "ESC") # プレイ中も見せる
+                    (self.btn_esc, "ESC")
                 ]
+                # クリアしていない時だけ「Change」ボタンをリストに加える
+                if not self.is_cleared:
+                    buttons.append((self.btn_change, "Spiki"))
             else:
-                return # それ以外（タイトル等）は表示しない
+                return
 
+        # --- 4. 描画処理 ---
         for btn, label in buttons:
-            # 1. ボタンの背景（半透明）
             s = pygame.Surface((btn.width, btn.height), pygame.SRCALPHA)
-            pygame.draw.rect(s, (255, 255, 255, 60), s.get_rect(), border_radius=10)
+            # 枠と背景の透明度を少し上げて、ゲーム画面を見やすく調整
+            pygame.draw.rect(s, (255, 255, 255, 40), s.get_rect(), border_radius=15)
             
-            # 2. テキストのレンダリング
-            # render(テキスト, アンチエイリアス, 色)
             text_surf = self.btn_font.render(label, True, (255, 255, 255))
-            
-            # 3. テキストをボタンSurfaceの中央に配置
             text_rect = text_surf.get_rect(center=(btn.width // 2, btn.height // 2))
             s.blit(text_surf, text_rect)
             
-            # 4. メインキャンバス（game_canvas）に反映
             surface.blit(s, btn.topleft)
-            
-            # 5. ボタンの枠線（視認性向上）
-            pygame.draw.rect(surface, (255, 255, 255, 120), btn, 2, border_radius=10)
+            pygame.draw.rect(surface, (255, 255, 255, 80), btn, 2, border_radius=15)
 
     def draw_play_scene(self, dt):
         # chapterは 'grassland' や 'cave' が入る想定
@@ -1253,13 +1278,17 @@ class Game:
         window_w, window_h = window_size
         t = input_state["trigger"]
         h = input_state["hold"] # holdも参照に追加
-
+        
         if e.type in (pygame.FINGERDOWN, pygame.FINGERMOTION):
             self.is_touch_device = True
             f_pos = (e.x * window_w, e.y * window_h)
             active_fingers[e.finger_id] = f_pos 
             
             if e.type == pygame.FINGERDOWN:
+                if not self.audio_initialized:
+                    # 非同期で最小限の準備を実行
+                    asyncio.create_task(self.warmup_sounds())
+                
                 if self.btn_esc.collidepoint(f_pos):
                     self.is_paused = not self.is_paused
                 
@@ -1276,7 +1305,13 @@ class Game:
                         t["down"] = h["down"] = True
 
                     if self.btn_jump.collidepoint(f_pos):
-                        t["jump"] = t["enter"] = h["jump"] = True
+                        if self.is_cleared:
+                            # クリア時は「OK」ボタンとして機能
+                            self.scene = "SELECT"
+                            self.is_cleared = False
+                        else:
+                            # 通常時はジャンプ
+                            t["jump"] = t["enter"] = h["jump"] = True
                     
                     if self.btn_change.collidepoint(f_pos):
                         t["change"] = h["change"] = True
@@ -1289,7 +1324,7 @@ class Game:
                         self.is_cleared = False
 
         elif e.type == pygame.FINGERUP:
-            # 指が離れたときのみ削除（holdのリセットは _update_touch_input が行う）
+            # 指が離れたときのみ削除
             active_fingers.pop(e.finger_id, None)
 
         # --- キーボード処理（略） ---
